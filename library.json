@@ -12,7 +12,10 @@
 ],
 "build": 
 { 
-    "flags" : "-Ifirmware/ -I../../src/"
+    "srcFilter": [
+    "firmware/+<*.cpp>",
+    "firmware/+<*.h>"
+	]
 },
 "dependencies": {   },
 "version": "1.0.0",
