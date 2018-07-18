@@ -15,17 +15,21 @@
   BSD license, all text above must be included in any redistribution
  ****************************************************/
 
+#include <Arduino.h>
+#include <Wire.h>
+#include <SPI.h>
 #include "Adafruit_L3GD20.h"
 
 /***************************************************************************
  CONSTRUCTOR
  ***************************************************************************/
 
-Adafruit_L3GD20::Adafruit_L3GD20(int8_t cs, int8_t miso, int8_t mosi, int8_t clk) {
+Adafruit_L3GD20::Adafruit_L3GD20(int8_t cs, int8_t miso, int8_t mosi, int8_t clk, SPIClass *spi) {
   _cs = cs;
   _miso = miso;
   _mosi = mosi;
   _clk = clk;
+  _spi = spi;
 }
 
 Adafruit_L3GD20::Adafruit_L3GD20(void) {
@@ -51,8 +55,8 @@ bool Adafruit_L3GD20::begin(l3gd20Range_t rng, byte addr)
   /* Make sure we have the correct chip ID since this checks
      for correct address and that the IC is properly connected */
   uint8_t id = read8(L3GD20_REGISTER_WHO_AM_I);
-  //Serial.println(id, HEX);
-  if ((id != L3GD20_ID) && (id != L3GD20H_ID))
+
+  if ((id != L3GD20_ID) && (id != L3GD20H_ID) && (id != A3G4250D_ID))
   {
     return false;
   }
@@ -98,7 +102,7 @@ bool Adafruit_L3GD20::begin(l3gd20Range_t rng, byte addr)
   /* Nothing to do ... keep default values */
   /* ------------------------------------------------------------------ */
 
-  /* Set CTRL_REG4 (0x23)
+  /* Set CTRL_REG4 (0x23) L3DS
    ====================================================================
    BIT  Symbol    Description                                   Default
    ---  ------    --------------------------------------------- -------
@@ -111,18 +115,33 @@ bool Adafruit_L3GD20::begin(l3gd20Range_t rng, byte addr)
                                   11 = 2000 dps
      0  SIM       SPI Mode (0=4-wire, 1=3-wire)                       0 */
 
-  /* Adjust resolution if requested */
-  switch(range)
-  {
-    case L3DS20_RANGE_250DPS:
-      write8(L3GD20_REGISTER_CTRL_REG4, 0x00);
-      break;
-    case L3DS20_RANGE_500DPS:
-      write8(L3GD20_REGISTER_CTRL_REG4, 0x10);
-      break;
-    case L3DS20_RANGE_2000DPS:
-      write8(L3GD20_REGISTER_CTRL_REG4, 0x20);
-      break;
+/* Set CTRL_REG4 (0x23) A3DS
+   ====================================================================
+   BIT  Symbol    Description                                   Default
+   ---  ------    --------------------------------------------- -------
+     6  BLE       Big/Little-Endian (0=Data LSB, 1=Data MSB)          0
+   3-2  ST1/0     Self-test enable.                                  00
+                                  00 = Normal
+                                  01 = Self-test 0 (+)
+                                  10 = --
+                                  11 = Self-test 1 (-)
+     0  SIM       SPI Mode (0=4-wire, 1=3-wire)                       0 */
+
+
+  /* Adjust resolution if requested, A3G4250D has fixed 245 DPS */
+  if (id != A3G4250D_ID) {
+    switch(range)
+    {
+      case L3DS20_RANGE_250DPS:
+        write8(L3GD20_REGISTER_CTRL_REG4, 0x00);
+        break;
+      case L3DS20_RANGE_500DPS:
+        write8(L3GD20_REGISTER_CTRL_REG4, 0x10);
+        break;
+      case L3DS20_RANGE_2000DPS:
+        write8(L3GD20_REGISTER_CTRL_REG4, 0x20);
+        break;
+    }
   }
   /* ------------------------------------------------------------------ */
 
@@ -130,14 +149,13 @@ bool Adafruit_L3GD20::begin(l3gd20Range_t rng, byte addr)
    ====================================================================
    BIT  Symbol    Description                                   Default
    ---  ------    --------------------------------------------- -------
-     7  BOOT      Reboot memory content (0=normal, 1=reboot)          0
-     6  FIFO_EN   FIFO enable (0=FIFO disable, 1=enable)              0
-     4  HPen      High-pass filter enable (0=disable,1=enable)        0
-   3-2  INT1_SEL  INT1 Selection config                              00
-   1-0  OUT_SEL   Out selection config                               00 */
-
-  /* Nothing to do ... keep default values */
-  /* ------------------------------------------------------------------ */
+     7  BOOT      Reboot memory content (0=normal,1=reboot)           0
+     6  FIFO_EN   FIFO Enable (0=disable,1=FIFO enable)               0
+     4  HPen      High-pass filter enable (0=HPF Disable, 1=Enabled)  0
+     3  INT1_Sel1 INT Filter mode 0=no filter, 1=high-pass filtered   0
+     2  INT1_Sel0 2=low-pass filtered by LPF2                         0
+     1  Out_Sel1  Datareg & FIFO filtermode 0=no filter, 1=high-pass  0
+     0  Out_Sel0  2=low-pass filtered by LPF2                         0 */
 
   return true;
 }
@@ -155,21 +173,17 @@ void Adafruit_L3GD20::read()
     Wire.write(L3GD20_REGISTER_OUT_X_L | 0x80);
     Wire.endTransmission();
     Wire.requestFrom(address, (byte)6);
-    
     // Wait around until enough data is available
     while (Wire.available() < 6);
-    
     xlo = Wire.read();
     xhi = Wire.read();
     ylo = Wire.read();
     yhi = Wire.read();
     zlo = Wire.read();
     zhi = Wire.read();
-
   } else {
     digitalWrite(_clk, HIGH);
     digitalWrite(_cs, LOW);
-
     SPIxfer(L3GD20_REGISTER_OUT_X_L | 0x80 | 0x40); // SPI read, autoincrement
     delay(10);
     xlo = SPIxfer(0xFF);
@@ -178,7 +192,6 @@ void Adafruit_L3GD20::read()
     yhi = SPIxfer(0xFF);
     zlo = SPIxfer(0xFF);
     zhi = SPIxfer(0xFF);
-
     digitalWrite(_cs, HIGH);
   }
   // Shift values to create properly formed integer (low byte first)
@@ -221,10 +234,8 @@ void Adafruit_L3GD20::write8(l3gd20Registers_t reg, byte value)
   } else {
     digitalWrite(_clk, HIGH);
     digitalWrite(_cs, LOW);
-
     SPIxfer(reg);
     SPIxfer(value);
-
     digitalWrite(_cs, HIGH);
   }
 }
@@ -244,30 +255,38 @@ byte Adafruit_L3GD20::read8(l3gd20Registers_t reg)
   } else {
     digitalWrite(_clk, HIGH);
     digitalWrite(_cs, LOW);
-
     SPIxfer((uint8_t)reg | 0x80); // set READ bit
     value = SPIxfer(0xFF);
-
     digitalWrite(_cs, HIGH);
   }
-
   return value;
 }
 
 uint8_t Adafruit_L3GD20::SPIxfer(uint8_t x) {
+
   uint8_t value = 0;
-
-  for (int i=7; i>=0; i--) {
-    digitalWrite(_clk, LOW);
-    if (x & (1<<i)) {
-      digitalWrite(_mosi, HIGH);
-    } else {
-      digitalWrite(_mosi, LOW);
-      }
-    digitalWrite(_clk, HIGH);
-    if (digitalRead(_miso))
-      value |= (1<<i);
+  if (_spi != NULL) {
+    _spi->beginTransaction(SPISettings(L3GD20_SPI_SPEED, L3GD20_SPI_BITORDER, L3GD20_SPI_MODE));
+    // Read?
+    if (x == 0xff)
+      value = _spi->transfer(0);
+    else {
+      value = _spi->transfer(x);
+    }
+    _spi->endTransaction();
   }
-
+  else {
+    for (int i=7; i>=0; i--) {
+      digitalWrite(_clk, LOW);
+      if (x & (1<<i)) {
+        digitalWrite(_mosi, HIGH);
+      } else {
+        digitalWrite(_mosi, LOW);
+        }
+      digitalWrite(_clk, HIGH);
+      if (digitalRead(_miso))
+        value |= (1<<i);
+    }
+  }
   return value;
 }

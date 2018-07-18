@@ -14,15 +14,19 @@
   Written by Kevin "KTOWN" Townsend for Adafruit Industries.
   BSD license, all text above must be included in any redistribution
  ****************************************************/
+
 #ifndef __L3GD20_H__
 #define __L3GD20_H__
-
-#include "application.h"
 
 #define L3GD20_ADDRESS                (0x6B)        // 1101011
 #define L3GD20_POLL_TIMEOUT           (100)         // Maximum number of read attempts
 #define L3GD20_ID                     0xD4
 #define L3GD20H_ID                    0xD7
+#define A3G4250D_ID                   0xD3
+
+#define L3GD20_SPI_SPEED           10000000
+#define L3GD20_SPI_BITORDER        MSBFIRST
+#define L3GD20_SPI_MODE            SPI_MODE0
 
 #define L3GD20_SENSITIVITY_250DPS  (0.00875F)      // Roughly 22/256 for fixed point match
 #define L3GD20_SENSITIVITY_500DPS  (0.0175F)       // Roughly 45/256
@@ -69,6 +73,15 @@ class Adafruit_L3GD20
       L3DS20_RANGE_2000DPS
     } l3gd20Range_t;
 
+    typedef enum
+    {
+      MODE0,
+      MODE1,
+      MODE2,
+      MODE3,
+      BITBANG,
+    } l3gd20SPIMode_t;
+
     typedef struct l3gd20Data_s
     {
       float x;
@@ -76,7 +89,7 @@ class Adafruit_L3GD20
       float z;
     } l3gd20Data;
 
-    Adafruit_L3GD20(int8_t cs, int8_t mosi, int8_t miso, int8_t clk);
+    Adafruit_L3GD20(int8_t cs, int8_t mosi, int8_t miso, int8_t clk, SPIClass *spi=NULL);
     Adafruit_L3GD20(void);
 
     bool begin(l3gd20Range_t rng=L3DS20_RANGE_250DPS, byte addr=L3GD20_ADDRESS);
@@ -90,6 +103,7 @@ class Adafruit_L3GD20
     uint8_t SPIxfer(uint8_t x);
     byte address;
     l3gd20Range_t range;
+    SPIClass * _spi;
     int8_t _miso, _mosi, _clk, _cs;
 };
 
