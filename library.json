@@ -1,0 +1,21 @@
+{
+"name": "Adafruit L3GD20",
+"keywords": "L3GD",
+"description": "Driver for Adafruit's L3GD20 I2C Gyroscope Breakout",
+"downloadUrl": "https://github.com/adafruit/Adafruit_L3GD20",
+"authors":
+[
+    {
+    "name": "Adafruit",
+    "email": "info@adafruit.com"
+    }
+],
+"build": 
+{ 
+    "flags" : "-Ifirmware/ -I../../src/",
+},
+"dependencies": {   },
+"version": "1.0.0",
+"frameworks": "arduino",
+"platforms": "*"
+}
